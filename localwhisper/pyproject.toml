@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools-scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "localwhisper"
+version = "1.0.0"
+description = "Real-time local speech-to-text desktop application using OpenAI Whisper"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "LocalWhisper Team"}
+]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["whisper", "speech-to-text", "transcription", "voice", "dictation"]
+
+dependencies = [
+    "PyQt6>=6.5.0",
+    "pyqtgraph>=0.13.0",
+    "numpy>=1.24.0",
+    "sounddevice>=0.4.6",
+    "faster-whisper>=1.0.0",
+    "pynput>=1.7.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-qt>=4.0",
+    "black",
+    "isort",
+    "flake8",
+]
+cuda = [
+    "torch>=2.0.0",
+]
+
+[project.scripts]
+localwhisper = "localwhisper.app:main"
+
+[project.gui-scripts]
+localwhisper-gui = "localwhisper.app:main"
+
+[project.urls]
+Homepage = "https://github.com/localwhisper/localwhisper"
+Documentation = "https://github.com/localwhisper/localwhisper#readme"
+Repository = "https://github.com/localwhisper/localwhisper"
+Issues = "https://github.com/localwhisper/localwhisper/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100

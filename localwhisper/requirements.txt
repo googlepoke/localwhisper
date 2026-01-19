@@ -1,0 +1,29 @@
+# LocalWhisper Desktop Application Dependencies
+
+# UI Framework
+PyQt6>=6.5.0
+pyqtgraph>=0.13.0
+
+# Audio Processing
+PyAudio>=0.2.13
+numpy>=1.24.0
+sounddevice>=0.4.6
+
+# Transcription Engine (faster-whisper for optimized inference)
+faster-whisper>=1.0.0
+
+# Global Hotkeys & Keyboard Simulation
+pynput>=1.7.6
+
+# Voice Activity Detection
+silero-vad>=4.0
+
+# Storage
+# SQLite is built-in to Python
+
+# Utilities
+appdirs>=1.4.4
+
+# Optional: GPU acceleration (install separately based on platform)
+# torch>=2.0.0  # For CUDA support
+# whisper-mlx  # For Apple Silicon
