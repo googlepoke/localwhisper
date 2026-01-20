@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## GitHub Repository
+
+**Repository URL**: https://github.com/googlepoke/localwhisper
+
+**Git Remote**: `localwhisper` (use `git push localwhisper main` to push changes)
+
+When committing and pushing changes:
+```bash
+git add <files>
+git commit -m "Your commit message"
+git push localwhisper main
+```
+
 ## Project Overview
 
 OpenAI Whisper is a general-purpose speech recognition model built on a Transformer sequence-to-sequence architecture. It performs multilingual speech recognition, speech translation, language identification, and voice activity detection. The model processes audio through a sliding 30-second window approach.
