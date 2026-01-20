@@ -7,6 +7,7 @@ Supports press-and-hold mode where recording starts on key press and stops on re
 
 import threading
 import platform
+import time
 from typing import Optional, Callable, Set
 from dataclasses import dataclass
 from enum import Enum
@@ -109,6 +110,8 @@ class HotkeyManager:
         # Track pressed modifiers
         self._pressed_modifiers: Set[str] = set()
         self._hotkey_active = False
+        self._activation_time: float = 0.0
+        self._min_hold_time: float = 0.15  # Minimum 150ms hold to prevent spurious releases
 
         # Thread safety
         self._lock = threading.Lock()
@@ -204,6 +207,7 @@ class HotkeyManager:
                 with self._lock:
                     if not self._hotkey_active:
                         self._hotkey_active = True
+                        self._activation_time = time.time()
                         if self._on_press:
                             try:
                                 self._on_press()
@@ -216,13 +220,11 @@ class HotkeyManager:
         modifier = self._get_modifier_name(key)
         if modifier:
             self._pressed_modifiers.discard(modifier)
-
-            # If a required modifier is released while hotkey is active, trigger release
-            if self._hotkey_active and modifier in self._hotkey.modifiers:
-                self._trigger_release()
+            # Don't trigger release on modifier release - only on main key release
+            # This prevents spurious modifier release events from stopping recording
             return
 
-        # Check if the main key is released
+        # Check if the main key is released - this is the only trigger for release
         if self._hotkey.matches_pynput_key(key):
             if self._hotkey_active:
                 self._trigger_release()
@@ -231,7 +233,14 @@ class HotkeyManager:
         """Trigger the release callback."""
         with self._lock:
             if self._hotkey_active:
+                # Check minimum hold time to prevent spurious releases
+                elapsed = time.time() - self._activation_time
+                if elapsed < self._min_hold_time:
+                    # Spurious release - keep hotkey active, don't trigger callback
+                    # The actual release will come later
+                    return
                 self._hotkey_active = False
+                self._activation_time = 0.0
                 if self._on_release:
                     try:
                         self._on_release()

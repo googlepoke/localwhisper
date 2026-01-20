@@ -91,6 +91,8 @@ class UISettings:
     opacity: float = 0.9
     show_status_text: bool = True
     animation_fps: int = 60
+    waveform_always_on_top: bool = True  # Keep waveform overlay always on top
+    waveform_background_color: str = "#131313"  # Dark background for waveform
 
 
 @dataclass

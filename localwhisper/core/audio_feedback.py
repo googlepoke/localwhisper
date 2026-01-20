@@ -5,6 +5,7 @@ Handles playing audio cues for recording start/stop events.
 """
 
 import threading
+import platform
 from pathlib import Path
 from typing import Optional
 import math
@@ -51,6 +52,15 @@ class AudioFeedback:
             return
         except ImportError:
             pass
+
+        # Windows fallback using built-in winsound
+        if platform.system() == "Windows":
+            try:
+                import winsound
+                self._backend = "winsound"
+                return
+            except ImportError:
+                pass
 
         self._backend = None
 
@@ -146,12 +156,14 @@ class AudioFeedback:
 
         return struct.pack(f"{len(samples)}h", *samples)
 
-    def _play_audio(self, audio_data: bytes) -> None:
+    def _play_audio(self, audio_data: bytes, frequency: int = 440, duration_ms: int = 100) -> None:
         """
         Play audio data.
 
         Args:
             audio_data: Raw audio bytes (16-bit, 44100Hz, mono)
+            frequency: Frequency for winsound fallback
+            duration_ms: Duration in ms for winsound fallback
         """
         if not self.settings.sound_enabled:
             return
@@ -160,6 +172,8 @@ class AudioFeedback:
             self._play_sounddevice(audio_data)
         elif self._backend == "pyaudio":
             self._play_pyaudio(audio_data)
+        elif self._backend == "winsound":
+            self._play_winsound(frequency, duration_ms)
 
     def _play_sounddevice(self, audio_data: bytes) -> None:
         """Play using sounddevice."""
@@ -199,13 +213,29 @@ class AudioFeedback:
 
         threading.Thread(target=play_thread, daemon=True).start()
 
+    def _play_winsound(self, frequency: int, duration_ms: int) -> None:
+        """Play using Windows winsound (built-in, no dependencies)."""
+        import winsound
+
+        def play_thread():
+            try:
+                # Apply volume by adjusting duration (winsound doesn't support volume)
+                adjusted_duration = int(duration_ms * self.settings.sound_volume)
+                if adjusted_duration > 0:
+                    winsound.Beep(frequency, adjusted_duration)
+            except Exception as e:
+                print(f"Audio playback error: {e}")
+
+        threading.Thread(target=play_thread, daemon=True).start()
+
     def play_start(self) -> None:
         """Play the recording start sound."""
         if not self.settings.sound_enabled:
             return
 
         audio = self._generate_start_sound()
-        self._play_audio(audio)
+        # Ascending tone: 550Hz for winsound fallback
+        self._play_audio(audio, frequency=550, duration_ms=100)
 
     def play_stop(self) -> None:
         """Play the recording stop sound."""
@@ -213,7 +243,8 @@ class AudioFeedback:
             return
 
         audio = self._generate_stop_sound()
-        self._play_audio(audio)
+        # Descending tone: 440Hz for winsound fallback
+        self._play_audio(audio, frequency=440, duration_ms=100)
 
     def play_error(self) -> None:
         """Play an error sound."""
@@ -222,7 +253,7 @@ class AudioFeedback:
 
         # Lower tone for error
         audio = self._generate_tone(220, 0.15)
-        self._play_audio(audio)
+        self._play_audio(audio, frequency=220, duration_ms=150)
 
     def play_success(self) -> None:
         """Play a success sound."""
@@ -231,7 +262,7 @@ class AudioFeedback:
 
         # Higher, pleasant tone for success
         audio = self._generate_tone(660, 0.1)
-        self._play_audio(audio)
+        self._play_audio(audio, frequency=660, duration_ms=100)
 
     def set_enabled(self, enabled: bool) -> None:
         """Enable or disable sound feedback."""

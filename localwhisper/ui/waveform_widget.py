@@ -40,22 +40,32 @@ from localwhisper.core.config import UISettings
 
 
 class WaveformCanvas(QWidget):
-    """Canvas widget that draws the actual waveform."""
+    """Canvas widget that draws an oscilloscope-style line waveform."""
 
     def __init__(
         self,
         parent: Optional[QWidget] = None,
         accent_color: str = "#3B82F6",
-        bar_count: int = 40,
+        background_color: str = "#131313",
+        sample_count: int = 200,
     ):
         super().__init__(parent)
 
         self._accent_color = QColor(accent_color)
-        self._bar_count = bar_count
-        self._amplitudes: deque = deque([0.0] * bar_count, maxlen=bar_count)
+        self._background_color = QColor(background_color)
+        self._sample_count = sample_count
+        
+        # Store waveform samples (0.0-1.0, 0.5 is center/silence)
+        self._samples: List[float] = [0.5] * sample_count
+        
+        # Current amplitude for wave generation
+        self._current_amplitude: float = 0.0
+        self._target_amplitude: float = 0.0
+        
+        # Phase for continuous sine wave generation
+        self._phase: float = 0.0
 
-        # Animation
-        self._target_amplitudes: List[float] = [0.0] * bar_count
+        # Animation timer for continuous wave generation
         self._animation_timer = QTimer(self)
         self._animation_timer.timeout.connect(self._animate)
         self._animation_timer.start(16)  # ~60fps
@@ -63,79 +73,105 @@ class WaveformCanvas(QWidget):
         self.setMinimumSize(360, 40)
 
     def set_accent_color(self, color: str) -> None:
-        """Set the waveform accent color."""
+        """Set the waveform line color."""
         self._accent_color = QColor(color)
         self.update()
 
-    def add_amplitude(self, amplitude: float) -> None:
-        """Add a new amplitude value to the waveform."""
-        # Normalize and clamp
-        amplitude = max(0.0, min(1.0, amplitude))
+    def set_background_color(self, color: str) -> None:
+        """Set the waveform background color."""
+        self._background_color = QColor(color)
+        self.update()
 
-        # Shift existing and add new
-        self._target_amplitudes.pop(0)
-        self._target_amplitudes.append(amplitude)
+    def add_amplitude(self, amplitude: float) -> None:
+        """
+        Update the target amplitude for the waveform.
+        
+        The waveform continuously oscillates with amplitude controlling the wave height.
+        """
+        # Normalize and clamp amplitude, with some scaling for visibility
+        self._target_amplitude = max(0.0, min(1.0, amplitude * 2.5))
 
     def clear(self) -> None:
-        """Clear the waveform."""
-        self._target_amplitudes = [0.0] * self._bar_count
-        self._amplitudes = deque([0.0] * self._bar_count, maxlen=self._bar_count)
+        """Clear the waveform to flat center line."""
+        self._samples = [0.5] * self._sample_count
+        self._current_amplitude = 0.0
+        self._target_amplitude = 0.0
+        self._phase = 0.0
         self.update()
 
     def _animate(self) -> None:
-        """Smoothly animate towards target amplitudes."""
-        changed = False
-        smoothing = 0.3  # Lower = smoother
-
-        for i, target in enumerate(self._target_amplitudes):
-            current = self._amplitudes[i]
-            if abs(current - target) > 0.01:
-                self._amplitudes[i] = current + (target - current) * smoothing
-                changed = True
-            else:
-                self._amplitudes[i] = target
-
-        if changed:
-            self.update()
+        """Generate continuous waveform based on current amplitude."""
+        # Smoothly interpolate towards target amplitude
+        smoothing = 0.15
+        self._current_amplitude += (self._target_amplitude - self._current_amplitude) * smoothing
+        
+        # Decay target amplitude over time (audio callbacks will refresh it)
+        self._target_amplitude *= 0.95
+        
+        # Generate new samples for the wave
+        # Shift all samples left and add new ones on the right
+        samples_per_frame = 4  # How many new samples to add per animation frame
+        
+        for _ in range(samples_per_frame):
+            # Advance phase for sine wave
+            # Vary frequency slightly based on amplitude for more organic look
+            freq_multiplier = 0.25 + self._current_amplitude * 0.15
+            self._phase += freq_multiplier
+            
+            # Calculate displacement using sine wave modulated by amplitude
+            # Add some harmonics for richer wave shape
+            wave = math.sin(self._phase)
+            wave += 0.3 * math.sin(self._phase * 2.1)  # Add harmonic
+            wave += 0.15 * math.sin(self._phase * 3.2)  # Add another harmonic
+            wave = wave / 1.45  # Normalize
+            
+            # Scale by amplitude (max displacement of 0.45 from center)
+            displacement = self._current_amplitude * 0.45 * wave
+            sample = 0.5 + displacement
+            
+            # Shift samples left and add new one
+            self._samples.pop(0)
+            self._samples.append(sample)
+        
+        self.update()
 
     def paintEvent(self, event) -> None:
-        """Paint the waveform."""
+        """Paint the oscilloscope-style line waveform."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         width = self.width()
         height = self.height()
 
-        # Calculate bar dimensions
-        bar_spacing = 3
-        bar_width = max(2, (width - (self._bar_count - 1) * bar_spacing) // self._bar_count)
-        total_width = self._bar_count * bar_width + (self._bar_count - 1) * bar_spacing
-        start_x = (width - total_width) // 2
+        # Fill background
+        painter.fillRect(0, 0, width, height, QBrush(self._background_color))
 
-        # Create gradient
-        gradient = QLinearGradient(0, 0, 0, height)
-        gradient.setColorAt(0, self._accent_color.lighter(120))
-        gradient.setColorAt(1, self._accent_color)
+        # Set up pen for the waveform line
+        pen = QPen(self._accent_color)
+        pen.setWidth(2)
+        painter.setPen(pen)
 
-        # Draw bars
-        center_y = height // 2
+        # Calculate slice width (how much x-space each sample takes)
+        slice_width = width / self._sample_count
 
-        for i, amplitude in enumerate(self._amplitudes):
-            x = start_x + i * (bar_width + bar_spacing)
+        # Build the path through all samples
+        path = QPainterPath()
+        
+        for i, sample in enumerate(self._samples):
+            x = i * slice_width
+            # Sample is 0.0-1.0, convert to y coordinate (inverted: 0=top, 1=bottom)
+            y = sample * height
+            
+            if i == 0:
+                path.moveTo(x, y)
+            else:
+                path.lineTo(x, y)
 
-            # Bar height based on amplitude
-            bar_height = max(4, int(amplitude * (height - 8)))
+        # Draw line to right edge at center
+        path.lineTo(width, height / 2)
 
-            # Draw bar centered vertically
-            y = center_y - bar_height // 2
-
-            # Round corners
-            path = QPainterPath()
-            radius = min(bar_width // 2, 2)
-            path.addRoundedRect(x, y, bar_width, bar_height, radius, radius)
-
-            painter.fillPath(path, QBrush(gradient))
-
+        # Stroke the path
+        painter.drawPath(path)
         painter.end()
 
 
@@ -174,27 +210,38 @@ class WaveformWidget(QWidget):
     def _setup_ui(self) -> None:
         """Set up the widget UI."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(8)
+        
+        # Adjust margins based on whether status text is shown
+        if self.settings.show_status_text:
+            layout.setContentsMargins(16, 12, 16, 12)
+            layout.setSpacing(8)
+        else:
+            layout.setContentsMargins(8, 8, 8, 8)
+            layout.setSpacing(0)
 
-        # Waveform canvas
+        # Waveform canvas with oscilloscope-style line drawing
         self._canvas = WaveformCanvas(
             self,
             accent_color=self.settings.accent_color,
-            bar_count=40,
+            background_color=self.settings.waveform_background_color,
+            sample_count=256,
         )
         layout.addWidget(self._canvas)
 
-        # Status label
+        # Status label (only show if enabled in settings)
         self._status_label = QLabel()
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_label.setFont(QFont("Segoe UI", 10))
-        layout.addWidget(self._status_label)
-
-        self._update_status_display()
-
-        # Fixed size
-        self.setFixedSize(self.settings.waveform_width, self.settings.waveform_height + 20)
+        
+        if self.settings.show_status_text:
+            layout.addWidget(self._status_label)
+            self._update_status_display()
+            # Fixed size with status text
+            self.setFixedSize(self.settings.waveform_width, self.settings.waveform_height + 30)
+        else:
+            # Compact size without status text
+            self._status_label.hide()
+            self.setFixedSize(self.settings.waveform_width, self.settings.waveform_height)
 
     def _apply_style(self) -> None:
         """Apply the visual style."""
@@ -278,6 +325,11 @@ class WaveformWidget(QWidget):
         self.settings.accent_color = color
         self._canvas.set_accent_color(color)
 
+    def set_background_color(self, color: str) -> None:
+        """Set the waveform background color."""
+        self.settings.waveform_background_color = color
+        self._canvas.set_background_color(color)
+
     def mousePressEvent(self, event) -> None:
         """Handle mouse press."""
         self.clicked.emit()
@@ -296,23 +348,49 @@ class WaveformOverlay(QWidget):
         super().__init__(None)
 
         self.settings = settings or UISettings()
+        self._always_on_top = self.settings.waveform_always_on_top
 
-        # Window flags for overlay behavior
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool |
-            Qt.WindowType.WindowTransparentForInput
-        )
+        # Set initial window flags
+        self._update_window_flags()
 
         # Transparent background
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        # Don't show in taskbar
+        # Don't show in taskbar and don't take focus
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WidgetAttribute.WA_X11DoNotAcceptFocus, True)
 
         self._setup_ui()
         self._setup_animations()
+
+        # Timer to periodically ensure window stays on top
+        self._stay_on_top_timer = QTimer(self)
+        self._stay_on_top_timer.timeout.connect(self._ensure_on_top)
+        self._stay_on_top_timer.setInterval(100)  # Check every 100ms
+
+    def _update_window_flags(self) -> None:
+        """Update window flags based on always-on-top setting."""
+        base_flags = (
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.Tool |
+            Qt.WindowType.WindowDoesNotAcceptFocus
+        )
+        if self._always_on_top:
+            self.setWindowFlags(
+                base_flags |
+                Qt.WindowType.WindowStaysOnTopHint
+            )
+        else:
+            self.setWindowFlags(base_flags)
+
+    def set_always_on_top(self, enabled: bool) -> None:
+        """Set whether the overlay should stay always on top."""
+        if self._always_on_top != enabled:
+            self._always_on_top = enabled
+            was_visible = self.isVisible()
+            self._update_window_flags()
+            if was_visible:
+                self.show()
 
     def _setup_ui(self) -> None:
         """Set up the overlay UI."""
@@ -330,30 +408,50 @@ class WaveformOverlay(QWidget):
         shadow.setOffset(0, 4)
         self._waveform.setGraphicsEffect(shadow)
 
-        # Size based on waveform widget
+        # Size based on waveform widget and status text setting
+        if self.settings.show_status_text:
+            height_extra = 50  # Extra height for status text and shadow
+        else:
+            height_extra = 20  # Compact height without status text
+            
         self.setFixedSize(
             self.settings.waveform_width + 40,  # Extra for shadow
-            self.settings.waveform_height + 60,
+            self.settings.waveform_height + height_extra,
         )
 
     def _setup_animations(self) -> None:
         """Set up show/hide animations."""
         # Fade in animation
-        self._fade_animation = QPropertyAnimation(self, b"windowOpacity")
-        self._fade_animation.setDuration(200)
-        self._fade_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._fade_in_animation = QPropertyAnimation(self, b"windowOpacity")
+        self._fade_in_animation.setDuration(200)
+        self._fade_in_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        # Fade out animation (separate to avoid signal connection issues)
+        self._fade_out_animation = QPropertyAnimation(self, b"windowOpacity")
+        self._fade_out_animation.setDuration(200)
+        self._fade_out_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._fade_out_animation.finished.connect(self.hide)
 
     def _position_at_bottom_center(self) -> None:
-        """Position the overlay at bottom center of primary screen."""
+        """Position the overlay at bottom center of primary screen, just above taskbar."""
         screen = QApplication.primaryScreen()
         if screen:
             screen_geometry = screen.availableGeometry()
             x = screen_geometry.x() + (screen_geometry.width() - self.width()) // 2
-            y = screen_geometry.y() + screen_geometry.height() - self.height() - 50  # 50px from bottom
+            # Position right at the bottom of available screen area (just above taskbar)
+            y = screen_geometry.y() + screen_geometry.height() - self.height() - 5  # 5px margin from taskbar
             self.move(x, y)
+
+    def _ensure_on_top(self) -> None:
+        """Ensure the overlay stays on top of other windows."""
+        if self.isVisible() and self._always_on_top:
+            self.raise_()
 
     def show_overlay(self) -> None:
         """Show the overlay with animation."""
+        # Stop any ongoing hide animation
+        self._fade_out_animation.stop()
+        
         self._position_at_bottom_center()
         self._waveform.set_state(WaveformWidget.STATE_LISTENING)
         self._waveform.clear_waveform()
@@ -361,9 +459,15 @@ class WaveformOverlay(QWidget):
         # Fade in
         self.setWindowOpacity(0)
         self.show()
-        self._fade_animation.setStartValue(0)
-        self._fade_animation.setEndValue(self.settings.opacity)
-        self._fade_animation.start()
+        self.raise_()  # Ensure on top immediately
+
+        # Start timer to keep on top (only if always-on-top is enabled)
+        if self._always_on_top:
+            self._stay_on_top_timer.start()
+
+        self._fade_in_animation.setStartValue(0)
+        self._fade_in_animation.setEndValue(self.settings.opacity)
+        self._fade_in_animation.start()
 
     def hide_overlay(self, delay_ms: int = 0) -> None:
         """
@@ -379,10 +483,15 @@ class WaveformOverlay(QWidget):
 
     def _do_hide(self) -> None:
         """Perform the hide animation."""
-        self._fade_animation.setStartValue(self.windowOpacity())
-        self._fade_animation.setEndValue(0)
-        self._fade_animation.finished.connect(self.hide)
-        self._fade_animation.start()
+        # Stop the stay-on-top timer
+        self._stay_on_top_timer.stop()
+        
+        # Stop any ongoing show animation
+        self._fade_in_animation.stop()
+
+        self._fade_out_animation.setStartValue(self.windowOpacity())
+        self._fade_out_animation.setEndValue(0)
+        self._fade_out_animation.start()
 
     def show_success(self, delay_hide_ms: int = 500) -> None:
         """Show success state and then hide."""
@@ -405,6 +514,10 @@ class WaveformOverlay(QWidget):
     def set_accent_color(self, color: str) -> None:
         """Set the accent color."""
         self._waveform.set_accent_color(color)
+
+    def set_background_color(self, color: str) -> None:
+        """Set the waveform background color."""
+        self._waveform.set_background_color(color)
 
     @property
     def waveform(self) -> WaveformWidget:

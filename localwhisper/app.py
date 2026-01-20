@@ -253,10 +253,10 @@ class LocalWhisperApp(QObject):
         if not text.strip():
             return
 
-        # Type the transcribed text
+        # Inject the transcribed text (uses clipboard paste for smooth output)
         if self._text_injector:
-            # Small delay to let the overlay hide first
-            QTimer.singleShot(100, lambda: self._text_injector.type_text(text, immediate=True))
+            # Small delay to let the overlay hide and focus return to original app
+            QTimer.singleShot(150, lambda: self._text_injector.inject_text(text))
 
         # Save to history
         if self._history_manager and self._transcription_engine:
@@ -335,6 +335,8 @@ class LocalWhisperApp(QObject):
 
         if self._waveform_overlay:
             self._waveform_overlay.set_accent_color(self._config.ui.accent_color)
+            self._waveform_overlay.set_background_color(self._config.ui.waveform_background_color)
+            self._waveform_overlay.set_always_on_top(self._config.ui.waveform_always_on_top)
 
     def _on_hotkey_changed(self, new_hotkey: str) -> None:
         """Handle hotkey change."""

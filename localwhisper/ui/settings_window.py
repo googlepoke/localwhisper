@@ -298,12 +298,31 @@ class SettingsWindow(QDialog):
         waveform_group = QGroupBox("Waveform Display")
         waveform_layout = QFormLayout(waveform_group)
 
+        # Background color picker
+        bg_color_layout = QHBoxLayout()
+        self._bg_color_preview = QFrame()
+        self._bg_color_preview.setFixedSize(24, 24)
+        self._bg_color_preview.setStyleSheet(
+            f"background-color: {self._config.ui.waveform_background_color}; border-radius: 4px;"
+        )
+        bg_color_layout.addWidget(self._bg_color_preview)
+
+        self._bg_color_btn = QPushButton("Choose Color...")
+        self._bg_color_btn.clicked.connect(self._choose_background_color)
+        bg_color_layout.addWidget(self._bg_color_btn)
+        bg_color_layout.addStretch()
+
+        waveform_layout.addRow("Background Color:", bg_color_layout)
+
         self._opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self._opacity_slider.setRange(50, 100)
         waveform_layout.addRow("Opacity:", self._opacity_slider)
 
         self._show_status_cb = QCheckBox("Show status text")
         waveform_layout.addRow("", self._show_status_cb)
+
+        self._always_on_top_cb = QCheckBox("Keep waveform indicator always on top")
+        waveform_layout.addRow("", self._always_on_top_cb)
 
         layout.addWidget(waveform_group)
 
@@ -379,8 +398,12 @@ class SettingsWindow(QDialog):
         self._color_preview.setStyleSheet(
             f"background-color: {c.ui.accent_color}; border-radius: 4px;"
         )
+        self._bg_color_preview.setStyleSheet(
+            f"background-color: {c.ui.waveform_background_color}; border-radius: 4px;"
+        )
         self._opacity_slider.setValue(int(c.ui.opacity * 100))
         self._show_status_cb.setChecked(c.ui.show_status_text)
+        self._always_on_top_cb.setChecked(c.ui.waveform_always_on_top)
 
         # History
         self._history_enabled_cb.setChecked(c.history.enabled)
@@ -416,6 +439,7 @@ class SettingsWindow(QDialog):
         c.ui.theme = self._theme_combo.currentData()
         c.ui.opacity = self._opacity_slider.value() / 100.0
         c.ui.show_status_text = self._show_status_cb.isChecked()
+        c.ui.waveform_always_on_top = self._always_on_top_cb.isChecked()
 
         # History
         c.history.enabled = self._history_enabled_cb.isChecked()
@@ -448,6 +472,16 @@ class SettingsWindow(QDialog):
         if color.isValid():
             self._config.ui.accent_color = color.name()
             self._color_preview.setStyleSheet(
+                f"background-color: {color.name()}; border-radius: 4px;"
+            )
+
+    def _choose_background_color(self) -> None:
+        """Open color picker dialog for waveform background."""
+        current = QColor(self._config.ui.waveform_background_color)
+        color = QColorDialog.getColor(current, self, "Choose Waveform Background Color")
+        if color.isValid():
+            self._config.ui.waveform_background_color = color.name()
+            self._bg_color_preview.setStyleSheet(
                 f"background-color: {color.name()}; border-radius: 4px;"
             )
 
