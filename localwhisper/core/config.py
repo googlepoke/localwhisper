@@ -77,7 +77,7 @@ class TranscriptionSettings:
 @dataclass
 class HotkeySettings:
     """Hotkey configuration."""
-    activation_key: str = "alt+s"  # Default hotkey
+    activation_key: str = "ctrl+shift"  # Default hotkey
     hold_to_record: bool = True  # Press and hold mode
 
 
