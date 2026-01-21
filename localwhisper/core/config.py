@@ -160,6 +160,10 @@ class Config:
                     history=HistorySettings(**data.get("history", {})),
                 )
                 config._config_path = path
+                
+                # Validate hotkey - reset to default if invalid
+                config._validate_hotkey()
+                
                 return config
             except (json.JSONDecodeError, TypeError, KeyError) as e:
                 # Config file corrupted, return default
@@ -169,6 +173,17 @@ class Config:
         config = cls()
         config._config_path = path
         return config
+    
+    def _validate_hotkey(self) -> None:
+        """Validate hotkey and reset to default if invalid."""
+        from localwhisper.core.hotkey_manager import validate_hotkey
+        
+        error = validate_hotkey(self.hotkey.activation_key)
+        if error:
+            print(f"Warning: Invalid hotkey '{self.hotkey.activation_key}' in config, resetting to default")
+            default_hotkey = HotkeySettings()
+            self.hotkey.activation_key = default_hotkey.activation_key
+            self.save()  # Save the corrected config
 
     def save(self) -> None:
         """Save configuration to file."""
