@@ -69,11 +69,24 @@ class HotkeyCombo:
     def matches_pynput_key(self, key) -> bool:
         """Check if a pynput key matches this hotkey's key."""
         try:
-            if hasattr(key, "char") and key.char:
-                return key.char.lower() == self.key.lower()
-            elif hasattr(key, "name"):
+            # First check if it's a special key (like F1, space, etc.)
+            if hasattr(key, "name") and key.name:
                 return key.name.lower() == self.key.lower()
-        except AttributeError:
+            
+            # On Windows, when Ctrl is pressed, the char becomes a control code
+            # Check the virtual key code (vk) FIRST - this is the most reliable
+            if hasattr(key, "vk") and key.vk:
+                # vk codes for A-Z are 0x41-0x5A (65-90)
+                if 65 <= key.vk <= 90:
+                    return chr(key.vk).lower() == self.key.lower()
+                # vk codes for 0-9 are 0x30-0x39 (48-57)
+                if 48 <= key.vk <= 57:
+                    return chr(key.vk) == self.key
+            
+            # Fallback: check regular character (only for unmodified keys)
+            if hasattr(key, "char") and key.char and len(key.char) == 1 and key.char.isprintable():
+                return key.char.lower() == self.key.lower()
+        except (AttributeError, TypeError):
             pass
         return False
 
