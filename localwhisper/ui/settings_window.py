@@ -31,7 +31,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 
 from localwhisper.core.config import Config, AVAILABLE_MODELS
-from localwhisper.core.hotkey_manager import check_hotkey_conflict
+from localwhisper.core.hotkey_manager import check_hotkey_conflict, validate_hotkey
 
 
 class SettingsWindow(QDialog):
@@ -457,10 +457,20 @@ class SettingsWindow(QDialog):
                 return
 
     def _check_hotkey(self, text: str) -> None:
-        """Check hotkey for conflicts."""
+        """Check hotkey for validity and conflicts."""
+        # First check if hotkey format is valid
+        error = validate_hotkey(text)
+        if error:
+            self._hotkey_warning.setText(f"Error: {error}")
+            self._hotkey_warning.setStyleSheet("color: #EF4444;")  # Red for errors
+            self._hotkey_warning.show()
+            return
+
+        # Then check for conflicts
         warning = check_hotkey_conflict(text)
         if warning:
             self._hotkey_warning.setText(warning)
+            self._hotkey_warning.setStyleSheet("color: #F59E0B;")  # Orange for warnings
             self._hotkey_warning.show()
         else:
             self._hotkey_warning.hide()
@@ -517,6 +527,18 @@ class SettingsWindow(QDialog):
 
     def _apply_settings(self) -> None:
         """Apply settings without closing."""
+        # Validate hotkey before saving
+        new_hotkey = self._hotkey_edit.text().strip().lower()
+        error = validate_hotkey(new_hotkey)
+        if error:
+            QMessageBox.warning(
+                self,
+                "Invalid Hotkey",
+                f"Cannot apply settings:\n\n{error}\n\n"
+                "Please enter a valid hotkey (e.g., 'alt+s', 'ctrl+shift+space').",
+            )
+            return
+
         old_hotkey = self._original_config.hotkey.activation_key
         self._save_settings()
 

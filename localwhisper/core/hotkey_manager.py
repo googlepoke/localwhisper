@@ -303,3 +303,23 @@ def check_hotkey_conflict(hotkey: str) -> Optional[str]:
         return f"Warning: '{hotkey}' conflicts with '{common_conflicts[normalized]}'"
 
     return None
+
+
+def validate_hotkey(hotkey: str) -> Optional[str]:
+    """
+    Validate a hotkey string format.
+
+    Args:
+        hotkey: Hotkey string to validate
+
+    Returns:
+        Error message if invalid, None if valid
+    """
+    if not hotkey or not hotkey.strip():
+        return "Hotkey cannot be empty"
+
+    try:
+        HotkeyCombo.from_string(hotkey)
+        return None  # Valid
+    except ValueError as e:
+        return str(e)
