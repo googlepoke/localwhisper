@@ -93,8 +93,7 @@ class TestHotkeySettings:
     def test_default_values(self):
         """HotkeySettings should have correct defaults."""
         settings = HotkeySettings()
-        assert settings.activation_key == "alt+s"
-        assert settings.hold_to_record is True
+        assert settings.activation_key == "ctrl+alt+r"
 
     def test_custom_hotkey(self):
         """HotkeySettings should accept custom hotkey."""

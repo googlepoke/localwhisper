@@ -77,8 +77,7 @@ class TranscriptionSettings:
 @dataclass
 class HotkeySettings:
     """Hotkey configuration."""
-    activation_key: str = "ctrl+shift+s"  # Default hotkey (hold to record)
-    hold_to_record: bool = True  # Press and hold mode
+    activation_key: str = "ctrl+alt+r"  # Default hotkey (toggle mode)
 
 
 @dataclass
@@ -93,6 +92,9 @@ class UISettings:
     animation_fps: int = 60
     waveform_always_on_top: bool = True  # Keep waveform overlay always on top
     waveform_background_color: str = "#131313"  # Dark background for waveform
+    waveform_background_alpha: int = 255  # Background transparency (0=fully transparent, 255=opaque)
+    waveform_line_thickness: int = 2  # Thickness of the waveform line (1-10)
+    waveform_sensitivity: float = 2.5  # Sensitivity of oscillation (0.5-5.0)
 
 
 @dataclass

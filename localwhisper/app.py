@@ -87,8 +87,7 @@ class LocalWhisperApp(QObject):
 
             self._hotkey_manager = HotkeyManager(
                 hotkey=self._config.hotkey.activation_key,
-                on_press=self._on_hotkey_press,
-                on_release=self._on_hotkey_release,
+                on_toggle=self._toggle_recording,
             )
 
             self._text_injector = TextInjector()
@@ -163,20 +162,6 @@ class LocalWhisperApp(QObject):
         """Handle amplitude update in main thread."""
         if self._waveform_overlay and self._waveform_overlay.isVisible():
             self._waveform_overlay.add_amplitude(amplitude)
-
-    def _on_hotkey_press(self) -> None:
-        """Handle hotkey press - start recording."""
-        if self._is_recording or self._is_processing:
-            return
-
-        self._recording_started.emit()
-
-    def _on_hotkey_release(self) -> None:
-        """Handle hotkey release - stop recording and transcribe."""
-        if not self._is_recording:
-            return
-
-        self._recording_stopped.emit()
 
     def _on_recording_started(self) -> None:
         """Handle recording start in main thread."""
@@ -289,11 +274,17 @@ class LocalWhisperApp(QObject):
             QTimer.singleShot(3000, lambda: self._tray_icon.set_state(TrayState.IDLE))
 
     def _toggle_recording(self) -> None:
-        """Toggle recording state."""
+        """Toggle recording state - called when hotkey is pressed."""
+        if self._is_processing:
+            # Don't toggle during processing
+            return
+        
         if self._is_recording:
-            self._on_hotkey_release()
+            # Stop recording
+            self._recording_stopped.emit()
         else:
-            self._on_hotkey_press()
+            # Start recording
+            self._recording_started.emit()
 
     def _show_main_window(self) -> None:
         """Show the main application window."""
@@ -336,6 +327,10 @@ class LocalWhisperApp(QObject):
         if self._waveform_overlay:
             self._waveform_overlay.set_accent_color(self._config.ui.accent_color)
             self._waveform_overlay.set_background_color(self._config.ui.waveform_background_color)
+            self._waveform_overlay.set_background_alpha(self._config.ui.waveform_background_alpha)
+            self._waveform_overlay.set_line_thickness(self._config.ui.waveform_line_thickness)
+            self._waveform_overlay.set_sensitivity(self._config.ui.waveform_sensitivity)
+            self._waveform_overlay.set_width(self._config.ui.waveform_width)
             self._waveform_overlay.set_always_on_top(self._config.ui.waveform_always_on_top)
 
     def _on_hotkey_changed(self, new_hotkey: str) -> None:

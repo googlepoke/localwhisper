@@ -119,7 +119,7 @@ class SettingsWindow(QDialog):
         hotkey_layout = QFormLayout(hotkey_group)
 
         self._hotkey_edit = QLineEdit()
-        self._hotkey_edit.setPlaceholderText("e.g., alt+s, ctrl+shift+r")
+        self._hotkey_edit.setPlaceholderText("e.g., ctrl+alt+r, alt+shift+w")
         hotkey_layout.addRow("Activation Key:", self._hotkey_edit)
 
         self._hotkey_warning = QLabel()
@@ -298,13 +298,25 @@ class SettingsWindow(QDialog):
         waveform_group = QGroupBox("Waveform Display")
         waveform_layout = QFormLayout(waveform_group)
 
+        # Waveform width slider
+        width_layout = QHBoxLayout()
+        self._waveform_width_slider = QSlider(Qt.Orientation.Horizontal)
+        self._waveform_width_slider.setRange(200, 800)
+        self._waveform_width_slider.setValue(self._config.ui.waveform_width)
+        width_layout.addWidget(self._waveform_width_slider)
+        self._waveform_width_label = QLabel(f"{self._config.ui.waveform_width}px")
+        self._waveform_width_label.setMinimumWidth(50)
+        self._waveform_width_slider.valueChanged.connect(
+            lambda v: self._waveform_width_label.setText(f"{v}px")
+        )
+        width_layout.addWidget(self._waveform_width_label)
+        waveform_layout.addRow("Waveform Width:", width_layout)
+
         # Background color picker
         bg_color_layout = QHBoxLayout()
         self._bg_color_preview = QFrame()
         self._bg_color_preview.setFixedSize(24, 24)
-        self._bg_color_preview.setStyleSheet(
-            f"background-color: {self._config.ui.waveform_background_color}; border-radius: 4px;"
-        )
+        self._update_bg_color_preview()
         bg_color_layout.addWidget(self._bg_color_preview)
 
         self._bg_color_btn = QPushButton("Choose Color...")
@@ -314,9 +326,52 @@ class SettingsWindow(QDialog):
 
         waveform_layout.addRow("Background Color:", bg_color_layout)
 
+        # Background transparency slider (0=fully transparent, 100=opaque)
+        bg_alpha_layout = QHBoxLayout()
+        self._bg_alpha_slider = QSlider(Qt.Orientation.Horizontal)
+        self._bg_alpha_slider.setRange(0, 100)
+        self._bg_alpha_slider.setValue(int(self._config.ui.waveform_background_alpha / 255 * 100))
+        bg_alpha_layout.addWidget(self._bg_alpha_slider)
+        self._bg_alpha_label = QLabel(f"{int(self._config.ui.waveform_background_alpha / 255 * 100)}%")
+        self._bg_alpha_label.setMinimumWidth(40)
+        self._bg_alpha_slider.valueChanged.connect(
+            lambda v: self._bg_alpha_label.setText(f"{v}%")
+        )
+        self._bg_alpha_slider.valueChanged.connect(self._update_bg_color_preview)
+        bg_alpha_layout.addWidget(self._bg_alpha_label)
+        waveform_layout.addRow("Background Transparency:", bg_alpha_layout)
+
+        # Line thickness slider
+        thickness_layout = QHBoxLayout()
+        self._line_thickness_slider = QSlider(Qt.Orientation.Horizontal)
+        self._line_thickness_slider.setRange(1, 10)
+        self._line_thickness_slider.setValue(self._config.ui.waveform_line_thickness)
+        thickness_layout.addWidget(self._line_thickness_slider)
+        self._line_thickness_label = QLabel(f"{self._config.ui.waveform_line_thickness}px")
+        self._line_thickness_label.setMinimumWidth(40)
+        self._line_thickness_slider.valueChanged.connect(
+            lambda v: self._line_thickness_label.setText(f"{v}px")
+        )
+        thickness_layout.addWidget(self._line_thickness_label)
+        waveform_layout.addRow("Line Thickness:", thickness_layout)
+
+        # Oscillation sensitivity slider
+        sensitivity_layout = QHBoxLayout()
+        self._sensitivity_slider = QSlider(Qt.Orientation.Horizontal)
+        self._sensitivity_slider.setRange(5, 50)  # 0.5 to 5.0 (multiplied by 10)
+        self._sensitivity_slider.setValue(int(self._config.ui.waveform_sensitivity * 10))
+        sensitivity_layout.addWidget(self._sensitivity_slider)
+        self._sensitivity_label = QLabel(f"{self._config.ui.waveform_sensitivity:.1f}x")
+        self._sensitivity_label.setMinimumWidth(40)
+        self._sensitivity_slider.valueChanged.connect(
+            lambda v: self._sensitivity_label.setText(f"{v / 10:.1f}x")
+        )
+        sensitivity_layout.addWidget(self._sensitivity_label)
+        waveform_layout.addRow("Oscillation Sensitivity:", sensitivity_layout)
+
         self._opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self._opacity_slider.setRange(50, 100)
-        waveform_layout.addRow("Opacity:", self._opacity_slider)
+        waveform_layout.addRow("Window Opacity:", self._opacity_slider)
 
         self._show_status_cb = QCheckBox("Show status text")
         waveform_layout.addRow("", self._show_status_cb)
@@ -398,9 +453,15 @@ class SettingsWindow(QDialog):
         self._color_preview.setStyleSheet(
             f"background-color: {c.ui.accent_color}; border-radius: 4px;"
         )
-        self._bg_color_preview.setStyleSheet(
-            f"background-color: {c.ui.waveform_background_color}; border-radius: 4px;"
-        )
+        self._waveform_width_slider.setValue(c.ui.waveform_width)
+        self._waveform_width_label.setText(f"{c.ui.waveform_width}px")
+        self._update_bg_color_preview(int(c.ui.waveform_background_alpha / 255 * 100))
+        self._bg_alpha_slider.setValue(int(c.ui.waveform_background_alpha / 255 * 100))
+        self._bg_alpha_label.setText(f"{int(c.ui.waveform_background_alpha / 255 * 100)}%")
+        self._line_thickness_slider.setValue(c.ui.waveform_line_thickness)
+        self._line_thickness_label.setText(f"{c.ui.waveform_line_thickness}px")
+        self._sensitivity_slider.setValue(int(c.ui.waveform_sensitivity * 10))
+        self._sensitivity_label.setText(f"{c.ui.waveform_sensitivity:.1f}x")
         self._opacity_slider.setValue(int(c.ui.opacity * 100))
         self._show_status_cb.setChecked(c.ui.show_status_text)
         self._always_on_top_cb.setChecked(c.ui.waveform_always_on_top)
@@ -437,6 +498,10 @@ class SettingsWindow(QDialog):
 
         # Display
         c.ui.theme = self._theme_combo.currentData()
+        c.ui.waveform_width = self._waveform_width_slider.value()
+        c.ui.waveform_background_alpha = int(self._bg_alpha_slider.value() / 100 * 255)
+        c.ui.waveform_line_thickness = self._line_thickness_slider.value()
+        c.ui.waveform_sensitivity = self._sensitivity_slider.value() / 10.0
         c.ui.opacity = self._opacity_slider.value() / 100.0
         c.ui.show_status_text = self._show_status_cb.isChecked()
         c.ui.waveform_always_on_top = self._always_on_top_cb.isChecked()
@@ -491,6 +556,21 @@ class SettingsWindow(QDialog):
         color = QColorDialog.getColor(current, self, "Choose Waveform Background Color")
         if color.isValid():
             self._config.ui.waveform_background_color = color.name()
+            self._update_bg_color_preview()
+
+    def _update_bg_color_preview(self, alpha_percent: int = None) -> None:
+        """Update the background color preview with current color and alpha."""
+        if alpha_percent is None:
+            alpha_percent = int(self._config.ui.waveform_background_alpha / 255 * 100)
+        color = QColor(self._config.ui.waveform_background_color)
+        alpha = int(alpha_percent / 100 * 255)
+        # Show checkerboard pattern for transparency indication
+        if alpha < 255:
+            self._bg_color_preview.setStyleSheet(
+                f"background-color: rgba({color.red()}, {color.green()}, {color.blue()}, {alpha}); "
+                f"border-radius: 4px; border: 1px solid #555;"
+            )
+        else:
             self._bg_color_preview.setStyleSheet(
                 f"background-color: {color.name()}; border-radius: 4px;"
             )

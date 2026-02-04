@@ -93,38 +93,34 @@ class HotkeyCombo:
 
 class HotkeyManager:
     """
-    Global hotkey manager for press-and-hold recording activation.
+    Global hotkey manager for toggle recording activation.
 
-    Listens for global keyboard events and triggers callbacks when
-    the configured hotkey is pressed/released.
+    Listens for global keyboard events and triggers a callback when
+    the configured hotkey is pressed (toggle mode).
     """
 
     def __init__(
         self,
-        hotkey: str = "alt+s",
-        on_press: Optional[Callable[[], None]] = None,
-        on_release: Optional[Callable[[], None]] = None,
+        hotkey: str = "ctrl+alt+r",
+        on_toggle: Optional[Callable[[], None]] = None,
     ):
         """
         Initialize the hotkey manager.
 
         Args:
-            hotkey: Hotkey string (e.g., "alt+s", "ctrl+shift+r")
-            on_press: Callback when hotkey is pressed
-            on_release: Callback when hotkey is released
+            hotkey: Hotkey string (e.g., "ctrl+alt+r", "alt+shift+w")
+            on_toggle: Callback when hotkey is pressed (toggles recording)
         """
         self._hotkey = HotkeyCombo.from_string(hotkey)
-        self._on_press = on_press
-        self._on_release = on_release
+        self._on_toggle = on_toggle
 
         self._listener: Optional[keyboard.Listener] = None
         self._is_running = False
 
         # Track pressed modifiers
         self._pressed_modifiers: Set[str] = set()
-        self._hotkey_active = False
-        self._activation_time: float = 0.0
-        self._min_hold_time: float = 0.15  # Minimum 150ms hold to prevent spurious releases
+        self._last_toggle_time: float = 0.0
+        self._debounce_time: float = 0.3  # Prevent double-triggers
 
         # Thread safety
         self._lock = threading.Lock()
@@ -145,23 +141,19 @@ class HotkeyManager:
         if was_running:
             self.start()
 
-    def set_callbacks(
+    def set_callback(
         self,
-        on_press: Optional[Callable[[], None]] = None,
-        on_release: Optional[Callable[[], None]] = None,
+        on_toggle: Optional[Callable[[], None]] = None,
     ) -> None:
         """
-        Set the press/release callbacks.
+        Set the toggle callback.
 
         Args:
-            on_press: Callback when hotkey is pressed
-            on_release: Callback when hotkey is released
+            on_toggle: Callback when hotkey is pressed (toggles recording)
         """
         with self._lock:
-            if on_press is not None:
-                self._on_press = on_press
-            if on_release is not None:
-                self._on_release = on_release
+            if on_toggle is not None:
+                self._on_toggle = on_toggle
 
     def start(self) -> None:
         """Start listening for the hotkey."""
@@ -169,7 +161,7 @@ class HotkeyManager:
             return
 
         self._pressed_modifiers.clear()
-        self._hotkey_active = False
+        self._last_toggle_time = 0.0
 
         self._listener = keyboard.Listener(
             on_press=self._handle_press,
@@ -188,7 +180,6 @@ class HotkeyManager:
             self._listener = None
 
         self._is_running = False
-        self._hotkey_active = False
         self._pressed_modifiers.clear()
 
     def _get_modifier_name(self, key) -> Optional[str]:
@@ -217,58 +208,27 @@ class HotkeyManager:
         # Check if the hotkey combo is complete
         if self._hotkey.matches_pynput_key(key):
             if self._pressed_modifiers == self._hotkey.modifiers:
+                # Debounce check to prevent double-triggers
+                now = time.time()
                 with self._lock:
-                    if not self._hotkey_active:
-                        self._hotkey_active = True
-                        self._activation_time = time.time()
-                        if self._on_press:
+                    if now - self._last_toggle_time > self._debounce_time:
+                        self._last_toggle_time = now
+                        if self._on_toggle:
                             try:
-                                self._on_press()
+                                self._on_toggle()
                             except Exception as e:
-                                print(f"Error in hotkey press callback: {e}")
+                                print(f"Error in hotkey toggle callback: {e}")
 
     def _handle_release(self, key) -> None:
-        """Handle key release event."""
-        # Check if it's a modifier
+        """Handle key release event - only track modifier releases."""
         modifier = self._get_modifier_name(key)
         if modifier:
             self._pressed_modifiers.discard(modifier)
-            # Don't trigger release on modifier release - only on main key release
-            # This prevents spurious modifier release events from stopping recording
-            return
-
-        # Check if the main key is released - this is the only trigger for release
-        if self._hotkey.matches_pynput_key(key):
-            if self._hotkey_active:
-                self._trigger_release()
-
-    def _trigger_release(self) -> None:
-        """Trigger the release callback."""
-        with self._lock:
-            if self._hotkey_active:
-                # Check minimum hold time to prevent spurious releases
-                elapsed = time.time() - self._activation_time
-                if elapsed < self._min_hold_time:
-                    # Spurious release - keep hotkey active, don't trigger callback
-                    # The actual release will come later
-                    return
-                self._hotkey_active = False
-                self._activation_time = 0.0
-                if self._on_release:
-                    try:
-                        self._on_release()
-                    except Exception as e:
-                        print(f"Error in hotkey release callback: {e}")
 
     @property
     def is_running(self) -> bool:
         """Check if the hotkey manager is running."""
         return self._is_running
-
-    @property
-    def is_active(self) -> bool:
-        """Check if the hotkey is currently pressed."""
-        return self._hotkey_active
 
     @property
     def current_hotkey(self) -> str:
